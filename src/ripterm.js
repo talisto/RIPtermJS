@@ -140,9 +140,11 @@ class RIPterm {
       Object.entries(opts).forEach( ([k, v]) => { this.opts[k] = v } );
 
       // init other vars
-      this.ripData = [];    // old v3 file pre-loaded
-      this.inStream = null; // new v4 stream
-      this.inReader = null; // new v4 stream reader
+      this.ripData = [];    // v3 file pre-loaded
+      this.inStream = null; // v4 stream
+      this.inReader = null; // v4 stream reader
+      this.inBuffer = null; // v4 stream buffer (Uint8Array)
+      this.inText = '';     // v4 unprocessed text carried over
       this.cmdi = 0;        // command counter
       this.cmdTimer = null; // commands interval timer
       this.refTimer = null; // refresh interval timer
@@ -634,6 +636,56 @@ class RIPterm {
     return Math.ceil((interval / 1000) * (speed / 10));
   }
 
+  // copied from AI
+  // chunkSize: bytes per chunk
+  // delay: ms between chunks
+  // NOT TESTED
+  //
+  createThrottleTransform({ chunkSize = 1024, delay = 50 } = {}) {
+
+    let leftover = null;
+    return new TransformStream({
+      async transform(chunk, controller) {
+        // Ensure Uint8Array
+        if (!(chunk instanceof Uint8Array)) {
+          chunk = new Uint8Array(chunk);
+        }
+
+        // Prepend leftover bytes from previous transform
+        if (leftover) {
+          const combined = new Uint8Array(leftover.length + chunk.length);
+          combined.set(leftover);
+          combined.set(chunk, leftover.length);
+          chunk = combined;
+          leftover = null;
+        }
+
+        let offset = 0;
+
+        while (offset + chunkSize <= chunk.length) {
+          controller.enqueue(chunk.slice(offset, offset + chunkSize));
+          offset += chunkSize;
+
+          if (delay > 0) {
+            await new Promise(r => setTimeout(r, delay));
+          }
+        }
+
+        // Save remainder for next chunk
+        if (offset < chunk.length) {
+          leftover = chunk.slice(offset);
+        }
+      },
+
+      flush(controller) {
+        if (leftover) {
+          controller.enqueue(leftover);
+          leftover = null;
+        }
+      }
+    });
+  }
+
   async setupStream (name, stream) {
 
     this.log('trm', `Streaming: ${name}`);
@@ -646,7 +698,15 @@ class RIPterm {
     }
     this.inStream = stream;
     this.inReader = stream.getReader();
+
+    //this.inReader = stream.getReader({ mode: "byob" });
+    // Unhandled Promise Rejection: TypeError: ReadableStreamBYOBReader needs a ReadableByteStreamController
+
+    //this.inBuffer = new Uint8Array(calculateStreamBufferSize());
   }
+
+  // async playStream (reader = this.inReader) {
+  // }
 
   // currently reads the entire stream until it's finished.
   // (not done)
@@ -666,7 +726,13 @@ class RIPterm {
       // Unhandled Promise Rejection: TypeError: read() called on a reader owned by no readable stream
       // (likely happens if 'Play' button pressed in rapid succession?)
 
+      // example from AI
+      //const reader = stream.getReader({ mode: "byob" });
+      //const buffer = new Uint8Array(64 * 1024); // 64 KB
+      //const { value, done } = await reader.read(buffer);
+
       const { value, done } = await reader.read();
+      //const { value, done } = await reader.read(this.inBuffer);
       if (done) {
         this.log('trm', 'Stream complete');
         break;
@@ -681,6 +747,8 @@ class RIPterm {
       //const text = String.fromCharCode(...value); // ASCII only (can crash with large array)
       const text = new TextDecoder("utf-8").decode(value);
       //outText += text;
+
+      //this.log('trm', value); // DEBUG
 
     /*
       // DEBUG
