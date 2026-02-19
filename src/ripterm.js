@@ -127,13 +127,15 @@ class RIPterm {
         'logQuiet' : false,      // set to true to stop logging to console
         'fontsPath' : 'fonts',
         'iconsPath' : 'icons',
-        'origButtons' : true,   // set true to use original selected button style
+        'origButtons' : true,     // set true to use original selected button style
+        'svgShowIcons' : true,
+        'svgEmbedIcons' : true,  // true: embed icons, false: use relative URL to .png
+        'svgIncludePut' : false,  // adds RIP_GET_IMAGE & RIP_PUT_IMAGE to SVG.
 
         // these options copied from prior version are not implemented yet.
         'floodFill' : true,
         'debugVerbose' : false,  // verbose flag
         'debugFillBuf' : false,  // display flood-fill buffer in canvas instead of normal drawings.
-        'svgIncludePut' : false, // adds RIP_PUT_IMAGE (1P) to SVG (experimental)
       };
 
       // assign or overwrite opts with passed-in options
@@ -199,6 +201,9 @@ class RIPterm {
             prefix: this.opts.svgPrefix,
             fontsPath: this.opts.fontsPath,
             iconsPath: this.opts.iconsPath,
+            svgShowIcons: this.opts.svgShowIcons,
+            svgEmbedIcons: this.opts.svgEmbedIcons,
+            svgIncludePut: this.opts.svgIncludePut,
             log: (type, msg) => { this.log(type, msg) }
           })
           : new BGI({
@@ -594,7 +599,8 @@ class RIPterm {
   // fetches the given array of icon files and caches them.
   async loadIcons (filenames) {
     return (await Promise.all(filenames.map(async fname => {
-      this.bgi.icons[fname] = await this.bgi.fetchIcon(fname);
+      const url = this.bgi.iconsPath + '/' + fname;
+      this.bgi.icons[fname] = await this.bgi.fetchIcon(url);
     })));
   }
 
@@ -1478,7 +1484,7 @@ class RIPterm {
 
     // draw image if present
     if ('image' in button) {
-      this.bgi._putimage(left, top, button.image, BGI.COPY_PUT);
+      this.bgi.putimage(left, top, button.image, BGI.COPY_PUT);
     }
     else {
       // draw fill surface
@@ -2184,7 +2190,8 @@ class RIPterm {
             const fname = outer.fixIconFilename(this.filename);
             if (fname) {
               if (ob.hilite) {
-                const img = await outer.bgi.readimagefile(fname);
+                // draw an inverted box for debugging (img should already be cached)
+                const img = await outer.bgi.readimagefile(fname); // keep here
                 if (img && img.data) {
                   outer.bgi._fillrect(this.x, this.y, this.x + img.width, this.y + img.height);
                 }

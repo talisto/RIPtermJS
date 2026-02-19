@@ -24,12 +24,16 @@ class BGIsvg extends BGI {
       super(args);
 
       // public vars
-      this.svgPrefix = ('prefix' in args) ? args.prefix : 'rip';
+      this.svgPrefix = args.prefix || 'rip';
       this.svgViewCount = 0;
       this.svgFillCount = 0;
+      this.svgImgCount = 0;
       this.svgFillId = this.svgPrefix + '-fill0';
       this.svgDashArray = [1, 0]; // SOLID_LINE
       this.svgActive = true;
+      this.svgShowIcons  = args.svgShowIcons  || false;
+      this.svgEmbedIcons = args.svgEmbedIcons || false; // false: use relative URLs
+      this.svgIncludePut = args.svgIncludePut || false;
 
       if (args.svg instanceof SVGElement) {
         this.svg = args.svg;
@@ -115,6 +119,8 @@ class BGIsvg extends BGI {
   resetSVG () {
     if (this.svg) {
       this.svgViewCount = 0;
+      this.svgFillCount = 0;
+      this.svgImgCount = 0;
       this.svg.innerHTML = '';
       this.svgSetViewport(this.info.vp);
       // fill viewport with background color
@@ -487,6 +493,60 @@ class BGIsvg extends BGI {
     }
     // must call at end, as it'll modify info.cp text position.
     super.outtext(text);
+  }
+
+  // Draws a bitmap image in SVG if svgShowIcons is set true.
+  // image is an object:
+  // { x:int, y:int, width:int, height:int, data:Uint8ClampedArray, url:string }
+  // TODO: wmode = write mode { 0=COPY_PUT, 1=XOR_PUT, 2=OR_PUT, 3=AND_PUT, 4=NOT_PUT }
+  //
+  putimage (left, top, image, wmode, defaults = {}) {
+    super.putimage(left, top, image, wmode);
+
+    const {
+      info = this.info,
+    } = defaults;
+
+    if (this.svg && this.svgActive && image.id && this.svgShowIcons) {
+      // offset by viewport
+      if (info && info.vp) {
+        left += info.vp.left;
+        top += info.vp.top;
+      }
+
+      // use image defined by readimagefile()
+      let href = '#' + image.id;
+      let useTag = this.svgNode('use', { href:href, x:left, y:top });
+      this.svg.appendChild(useTag);
+    }
+  }
+
+  // Fetch an ICN file from cache or online.
+  // filename: name without path.
+  // returns an image or empty object.
+  // { width:int, height:int, data:Uint8ClampedArray, url:string, id:string }
+  //
+  async readimagefile (filename) {
+    const image = await super.readimagefile(filename);
+
+    if (this.svgShowIcons && this.svg && this.svgActive && image && image.data && image.url) {
+      // preparing an 'image' SVG node
+      const id = this.svgPrefix + '-img' + this.svgImgCount;
+      image.id = id;
+
+      // either embed image as a data URL, or use a relative URL to .png version in the same path.
+      const url = (this.svgEmbedIcons) ? this.imageToDataURL(image) : image.url.replace('.ICN', '.png');
+
+      // append SVG node
+      if (url) {
+        const defs = this.svgNode('defs', {});
+        const imageTag = this.svgNode('image', { id:id, href:url, width:image.width, height:image.height });
+        defs.appendChild(imageTag);
+        this.svg.appendChild(defs);
+        this.svgImgCount++;
+      }
+    }
+    return image;
   }
 
   // draws in current line style, thickness, and drawing color

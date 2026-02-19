@@ -328,37 +328,43 @@ class BGI {
   }
 
   // updates the screen
-  refresh () {
+  refresh (defaults = {}) {
 
-    if (!(this.ctx && this.imgData && this.pixels && this.palette)) { return false; }
+    const {
+      ctx = this.ctx,
+      img = this.imgData,
+      pix = this.pixels,
+      pal = this.palette,
+      isBuffered = this.isBuffered,
+    } = defaults;
 
-    const img = this.imgData;
+    if (!(ctx && img && pix && pal)) { return false; }
 
     // copy pixel buffer to img
-    if (this.isBuffered) {
+    if (isBuffered) {
       // copy 8-bit pixels to 32-bit imgData
-      const numpix = this.pixels.length;
+      const numpix = pix.length;
       let pi = 0;
       for (let i=0, j=0; i < numpix; i++, j+=4) {
-        pi = this.pixels[i] * 4;
-        img.data[j + 0] = this.palette[pi + 0]; // R
-        img.data[j + 1] = this.palette[pi + 1]; // G
-        img.data[j + 2] = this.palette[pi + 2]; // B
+        pi = pix[i] * 4;
+        img.data[j + 0] = pal[pi + 0]; // R
+        img.data[j + 1] = pal[pi + 1]; // G
+        img.data[j + 2] = pal[pi + 2]; // B
         img.data[j + 3] = 255; // A
       }
     }
     /*
     else {
-      // using 8-bit imgData
-      let numpix = this.pixels.length;
+      // using 8-bit imgData (NOT TESTED)
+      let numpix = pix.length;
       for (let i=0; i < numpix; i++) {
-        img.data[i] = this.pixels[i];
+        img.data[i] = pix[i];
       }
       // assumes this.pixels point to this.imgData.data
       //ctx.putImageData(this.imgData, 0, 0);
     }
     */
-    this.ctx.putImageData(img, 0, 0);
+    ctx.putImageData(img, 0, 0);
     return true;
   }
 
@@ -983,7 +989,7 @@ class BGI {
 
     // check for valid input
     if ((fontname in this.fonts) === false) {
-      this.log('fnt', 'drawChar() font not found!');
+      this.log('fnt', `${fontname} font not found!`);
       return;
     }
 
@@ -992,7 +998,7 @@ class BGI {
     const actualScale = (scale < BGI.fontScales.length) ? BGI.fontScales[scale] : 1;
 
     if ((value < font.firstchar) || (value >= font.firstchar + font.numchars)) {
-      this.log('fnt', 'drawChar() value out of range! ' + value);
+      this.log('fnt', `value ${value} out of range in ${fontname}`);
       return;
     }
 
@@ -1185,25 +1191,15 @@ class BGI {
   // filename = filename without path.
   // uses this.iconsPath
   // returns: image object or undefined.
-  // { width:int, height:int, data:Uint8ClampedArray }
+  // { width:int, height:int, data:Uint8ClampedArray, url:string }
   //
-  async fetchIcon (filename) {
+  async fetchIcon (url) {
 
-    if (typeof filename !== 'string') {
-      this.log('err', 'fetchIcon() missing "filename"!');
+    if (typeof url !== 'string') {
+      this.log('err', 'fetchIcon() missing "url"!');
       return;
     }
-    if (typeof this.iconsPath !== 'string') {
-      this.log('err', 'must pass in "iconsPath" to BGI()!');
-      return;
-    }
-    //if (this.icons[filename]) {
-    //  // icon already in cache
-    //  return;
-    //}
-
-    const url = this.iconsPath + '/' + filename;
-    this.log('bgi', 'Fetching icon: ' + url);
+    this.log('bgi', `Fetching icon: ${url}`);
 
     let request = new Request(url);
     try {
@@ -1250,10 +1246,10 @@ class BGI {
               o += 8;
             }
           }
-          return { width: imgWidth, height: imgHeight, data: data };
+          return { width: imgWidth, height: imgHeight, data: data, url: url };
         }
         else {
-          this.log('bgi', `invalid icon? (${imgWidth} x ${imgHeight}) ${url}`);
+          this.log('bgi', `invalid icon? (${imgWidth} x ${imgHeight})`);
           return;
         }
     }
@@ -1261,6 +1257,34 @@ class BGI {
       this.log('err', `fetchIcon error: ${e}`);
       return;
     }
+  }
+
+  // Converts image.data to a base64 encoded href string.
+  // Uses current palette and data to create an embedded PNG.
+  // Doesn't handle writeMode, stores as BGI.COPY_PUT.
+  // Returns "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
+  //
+  imageToDataURL (image) {
+
+    if (!(image && image.width && image.height && image.data)) {
+      this.log('err', 'imageToDataURL() missing "image"!');
+      return;
+    }
+
+    // can use image.data byte buffer, don't need a new one
+    const w = image.width, h = image.height;
+
+    // create a temp canvas to write image to
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    const imgData = ctx.createImageData(w, h);
+
+    // copy 8-bit image.data to 32-bit canvas using current global palette
+    this.refresh({ ctx:ctx, img:imgData, pix:image.data, isBuffered:true });
+
+    // output canvas as a PNG data URL
+    return canvas.toDataURL("image/png");
   }
 
 
@@ -2166,15 +2190,23 @@ class BGI {
   // May draw past right edge of vp, or exits early if past right edge of canvas.
   // Will draw past bottom edge of vp and clip at edge of canvas.
   //
-  putimage (left, top, image, wmode) {
-    this._putimage(left, top, image, wmode);
+  putimage (left, top, image, wmode, defaults = {}) {
+    this._putimage(left, top, image, wmode, defaults);
   }
-  _putimage (left, top, image, wmode) {
+  _putimage (left, top, image, wmode, defaults = {}) {
 
-    // OLD
+    // ORIGINAL
     // putimage (left, top, bitmap, op)
     //   bitmap = points to where image stored
     //   op = see putimage_ops enum (0=COPY, 1=XOR, 2=OR, 3=AND, 4=NOT)
+
+    let {
+      pix = this.pixels,
+      info = this.info,
+      width = this.width,
+      height = this.height,
+      colorMask = this.colorMask,
+    } = defaults;
 
     if (!(image && image.data)) {
       this.log('err', 'putimage() missing image!');
@@ -2182,13 +2214,14 @@ class BGI {
     }
 
     // offset by viewport
-    const vp = this.info.vp;
-    left += vp.left;
-    top += vp.top;
+    if (info && info.vp) {
+      left += info.vp.left;
+      top += info.vp.top;
+    }
 
     const data = image.data; // Uint8ClampedArray
-    let right = left + image.width - 1;
-    let bottom = top + image.height - 1;
+    const right = left + image.width - 1;
+    const bottom = top + image.height - 1;
     let i=0, o=0, yi=0;
 
     // NOTE: the follow occurs under RIP 1.54
@@ -2196,21 +2229,21 @@ class BGI {
     //  (according to specs, not tested.)
 
     // exit early if image past right edge of canvas
-    if (right > this.width - 1) {
+    if (right > width - 1) {
       this.log('bgi', `putimage() ignored: right edge (${right}) past canvas edge.`);
       return false;
     }
     // draws past bottom of vp, but clips at canvas bottom
-    if (bottom > this.height - 1) { bottom = this.height - 1; }
+    if (bottom > height - 1) { bottom = height - 1; }
 
     switch (wmode) {
       default:
       case BGI.COPY_PUT:
         for (let y=top; y <= bottom; ++y) {
           i = yi * image.width;
-          o = y * this.width + left;
+          o = y * width + left;
           for (let x=left; x <= right; ++x) {
-            this.pixels[o++] = data[i++];
+            pix[o++] = data[i++];
           }
           yi++;
         }
@@ -2219,9 +2252,9 @@ class BGI {
       case BGI.XOR_PUT:
         for (let y=top; y <= bottom; ++y) {
           i = yi * image.width;
-          o = y * this.width + left;
+          o = y * width + left;
           for (let x=left; x <= right; ++x) {
-            this.pixels[o++] ^= data[i++];
+            pix[o++] ^= data[i++];
           }
           yi++;
         }
@@ -2230,9 +2263,9 @@ class BGI {
       case BGI.OR_PUT:
         for (let y=top; y <= bottom; ++y) {
           i = yi * image.width;
-          o = y * this.width + left;
+          o = y * width + left;
           for (let x=left; x <= right; ++x) {
-            this.pixels[o++] |= data[i++];
+            pix[o++] |= data[i++];
           }
           yi++;
         }
@@ -2241,9 +2274,9 @@ class BGI {
       case BGI.AND_PUT:
         for (let y=top; y <= bottom; ++y) {
           i = yi * image.width;
-          o = y * this.width + left;
+          o = y * width + left;
           for (let x=left; x <= right; ++x) {
-            this.pixels[o++] &= data[i++];
+            pix[o++] &= data[i++];
           }
           yi++;
         }
@@ -2252,9 +2285,9 @@ class BGI {
       case BGI.NOT_PUT:
         for (let y=top; y <= bottom; ++y) {
           i = yi * image.width;
-          o = y * this.width + left;
+          o = y * width + left;
           for (let x=left; x <= right; ++x) {
-            this.pixels[o++] = ~data[i++] & this.colorMask;
+            pix[o++] = ~data[i++] & colorMask;
           }
           yi++;
         }
@@ -2282,7 +2315,8 @@ class BGI {
     // retrieve image from cache first, if available
     let image = this.icons[filename];
     if (!image) {
-      image = await this.fetchIcon(filename);
+      const url = this.iconsPath + '/' + filename;
+      image = await this.fetchIcon(url);
       if (image) {
         // store in cache
         this.icons[filename] = image;
