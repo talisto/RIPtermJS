@@ -127,10 +127,10 @@ class RIPterm {
         'logQuiet' : false,      // set to true to stop logging to console
         'fontsPath' : 'fonts',
         'iconsPath' : 'icons',
-        'origButtons' : true,     // set true to use original selected button style
+        'origButtons' : true,    // set true to use original selected button style
         'svgShowIcons' : true,
         'svgEmbedIcons' : true,  // true: embed icons, false: use relative URL to .png
-        'svgIncludePut' : false,  // adds RIP_GET_IMAGE & RIP_PUT_IMAGE to SVG.
+        'svgGetImage' : true,    // adds RIP_GET_IMAGE & RIP_PUT_IMAGE to SVG.
 
         // these options copied from prior version are not implemented yet.
         'floodFill' : true,
@@ -203,7 +203,7 @@ class RIPterm {
             iconsPath: this.opts.iconsPath,
             svgShowIcons: this.opts.svgShowIcons,
             svgEmbedIcons: this.opts.svgEmbedIcons,
-            svgIncludePut: this.opts.svgIncludePut,
+            svgGetImage: this.opts.svgGetImage,
             log: (type, msg) => { this.log(type, msg) }
           })
           : new BGI({

@@ -2191,7 +2191,7 @@ class BGI {
   // Will draw past bottom edge of vp and clip at edge of canvas.
   //
   putimage (left, top, image, wmode, defaults = {}) {
-    this._putimage(left, top, image, wmode, defaults);
+    return this._putimage(left, top, image, wmode, defaults);
   }
   _putimage (left, top, image, wmode, defaults = {}) {
 
@@ -2219,9 +2219,9 @@ class BGI {
       top += info.vp.top;
     }
 
-    const data = image.data; // Uint8ClampedArray
-    const right = left + image.width - 1;
-    const bottom = top + image.height - 1;
+    let data = image.data; // Uint8ClampedArray
+    let right = left + image.width - 1;
+    let bottom = top + image.height - 1;
     let i=0, o=0, yi=0;
 
     // NOTE: the follow occurs under RIP 1.54

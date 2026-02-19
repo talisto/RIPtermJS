@@ -33,7 +33,7 @@ class BGIsvg extends BGI {
       this.svgActive = true;
       this.svgShowIcons  = args.svgShowIcons  || false;
       this.svgEmbedIcons = args.svgEmbedIcons || false; // false: use relative URLs
-      this.svgIncludePut = args.svgIncludePut || false;
+      this.svgGetImage   = args.svgGetImage   || false;
 
       if (args.svg instanceof SVGElement) {
         this.svg = args.svg;
@@ -452,9 +452,31 @@ class BGIsvg extends BGI {
     }
   }
 
+  // Grab and return a byte array of image data, then embeds it in SVG.
+  // returns this image object:
+  // { x:int, y:int, width:int, height:int, data:Uint8ClampedArray, id:string }
+  //
   getimage (left, top, right, bottom) {
-    //if (this.svgActive) { this.log('svg', 'RIP_GET_IMAGE (1C) not supported in SVGs.'); }
-    return super.getimage(left, top, right, bottom);
+    const image = super.getimage(left, top, right, bottom);
+
+    if (this.svgShowIcons && this.svgGetImage && this.svgView && this.svgActive && image && image.data) {
+      // preparing an 'image' SVG node
+      const id = this.svgPrefix + '-img' + this.svgImgCount;
+      image.id = id;
+
+      // embed image as a data URL
+      const url = this.imageToDataURL(image);
+
+      // append SVG node
+      if (url) {
+        const defs = this.svgNode('defs', {});
+        const imageTag = this.svgNode('image', { id:id, href:url, width:image.width, height:image.height });
+        defs.appendChild(imageTag);
+        this.svgView.appendChild(defs);
+        this.svgImgCount++;
+      }
+    }
+    return image;
   }
 
   // Draws text using current info.cp position, info.text.charsize and info.text.direction.
@@ -501,13 +523,17 @@ class BGIsvg extends BGI {
   // TODO: wmode = write mode { 0=COPY_PUT, 1=XOR_PUT, 2=OR_PUT, 3=AND_PUT, 4=NOT_PUT }
   //
   putimage (left, top, image, wmode, defaults = {}) {
-    super.putimage(left, top, image, wmode);
-
+    const ret = super.putimage(left, top, image, wmode);
     const {
       info = this.info,
     } = defaults;
 
-    if (this.svg && this.svgActive && image.id && this.svgShowIcons) {
+    if (ret && this.svgView && this.svgActive && image.id && this.svgShowIcons) {
+
+      if (wmode > 0) {
+        this.log('svg', `RIP_PUT_IMAGE mode ${wmode} not supported`); // DEBUG
+      }
+
       // offset by viewport
       if (info && info.vp) {
         left += info.vp.left;
@@ -517,8 +543,9 @@ class BGIsvg extends BGI {
       // use image defined by readimagefile()
       let href = '#' + image.id;
       let useTag = this.svgNode('use', { href:href, x:left, y:top });
-      this.svg.appendChild(useTag);
+      this.svgView.appendChild(useTag);
     }
+    return ret;
   }
 
   // Fetch an ICN file from cache or online.
@@ -529,7 +556,7 @@ class BGIsvg extends BGI {
   async readimagefile (filename) {
     const image = await super.readimagefile(filename);
 
-    if (this.svgShowIcons && this.svg && this.svgActive && image && image.data && image.url) {
+    if (this.svgShowIcons && this.svgView && this.svgActive && image && image.data && image.url) {
       // preparing an 'image' SVG node
       const id = this.svgPrefix + '-img' + this.svgImgCount;
       image.id = id;
@@ -542,7 +569,7 @@ class BGIsvg extends BGI {
         const defs = this.svgNode('defs', {});
         const imageTag = this.svgNode('image', { id:id, href:url, width:image.width, height:image.height });
         defs.appendChild(imageTag);
-        this.svg.appendChild(defs);
+        this.svgView.appendChild(defs);
         this.svgImgCount++;
       }
     }
@@ -552,6 +579,10 @@ class BGIsvg extends BGI {
   // draws in current line style, thickness, and drawing color
   rectangle (left, top, right, bottom, color = this.info.fgcolor, wmode = this.info.writeMode) {
     super.rectangle(left, top, right, bottom, color, wmode);
+
+    // swap
+    if (left > right) { let tmp = left; left = right; right = tmp; }
+    if (top > bottom) { let tmp = top; top = bottom; bottom = tmp; }
 
     const dashArray = this.svgGetDashArray(this.info.line.style);
     if (this.svgView && this.svgActive && dashArray.length) {
@@ -634,6 +665,9 @@ class BGIsvg extends BGI {
 
   // Sets the current viewport for graphics output.
   setviewport (x1, y1, x2, y2, clip) {
+    // swap
+    if (x1 > x2) { let tmp = x1; x1 = x2; x2 = tmp; }
+    if (y1 > y2) { let tmp = y1; y1 = y2; y2 = tmp; }
     super.setviewport(x1, y1, x2, y2, clip);
     this.svgSetViewport({ left: x1, top: y1, right: x2, bottom: y2 });
   }
