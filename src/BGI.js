@@ -350,7 +350,7 @@ class BGI {
         img.data[j + 0] = pal[pi + 0]; // R
         img.data[j + 1] = pal[pi + 1]; // G
         img.data[j + 2] = pal[pi + 2]; // B
-        img.data[j + 3] = 255; // A
+        img.data[j + 3] = pal[pi + 3]; // A
       }
     }
     /*
@@ -385,6 +385,31 @@ class BGI {
       this.info = this.stateStack.pop();
     }
   }
+
+  // Rearranges colors in the given palette applying NOT of index.
+  // returns a new palette.
+  invertedPalette (defaults = {}) {
+    const {
+      pal = this.palette,
+      mask = this.colorMask,
+    } = defaults;
+
+    const plength = (mask + 1) * 4;
+    let pal2 = Array(plength).fill(0);
+    let pi1=0, pi2=0;
+
+    for (let c=0; c <= mask; c++) {
+      pi1 = c * 4;
+      pi2 = (~c & mask) * 4;
+      // RGBA32 format: R, G, B, A (0-255)
+      pal2[pi2 + 0] = pal[pi1 + 0];
+      pal2[pi2 + 1] = pal[pi1 + 1];
+      pal2[pi2 + 2] = pal[pi1 + 2];
+      pal2[pi2 + 3] = pal[pi1 + 3];
+    }
+    return pal2;
+  }
+
 
   ////////////////////////////////////////////////////////////////////////////////
   // Drawing methods
@@ -1264,7 +1289,10 @@ class BGI {
   // Doesn't handle writeMode, stores as BGI.COPY_PUT.
   // Returns "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
   //
-  imageToDataURL (image) {
+  imageToDataURL (image, defaults = {}) {
+    const {
+      pal = this.palette
+    } = defaults;
 
     if (!(image && image.width && image.height && image.data)) {
       this.log('err', 'imageToDataURL() missing "image"!');
@@ -1281,7 +1309,7 @@ class BGI {
     const imgData = ctx.createImageData(w, h);
 
     // copy 8-bit image.data to 32-bit canvas using current global palette
-    this.refresh({ ctx:ctx, img:imgData, pix:image.data, isBuffered:true });
+    this.refresh({ ctx:ctx, img:imgData, pix:image.data, pal:pal, isBuffered:true });
 
     // output canvas as a PNG data URL
     return canvas.toDataURL("image/png");
@@ -1396,6 +1424,7 @@ class BGI {
     this.info.cp.y = 0;
     this.pixels.fill(bgcolor);
     this.fillpixels.fill(0);
+    this.icons = {}; // TEST: do we want to do this here? (clears image ids)
   }
 
   // Clears the viewport, filling it with the current background color.
@@ -2510,15 +2539,19 @@ class BGI {
   // colornum can be 0-15 or 0-255 depending on the grapics mode?
   // red, green, blue are 0-255, but only the top 6 bits of byte are used in BGI and WIN.
   // (but this implementation will use all 8 bits.)
-  setrgbpalette (colornum, red, green, blue) {
+  setrgbpalette (colornum, red, green, blue, alpha = 255, defaults = {}) {
     // setrgbpalette(int colornum, int red, int green, int blue);
+    const {
+      pal = this.palette
+    } = defaults;
+
     const pi = colornum * 4;
-    if (pi < this.palette.length) {
+    if (pi < pal.length) {
       // RGBA32 format: R, G, B, A
-      this.palette[pi + 0] = red;
-      this.palette[pi + 1] = green;
-      this.palette[pi + 2] = blue;
-      this.palette[pi + 3] = 255;
+      pal[pi + 0] = red;
+      pal[pi + 1] = green;
+      pal[pi + 2] = blue;
+      pal[pi + 3] = alpha;
     }
     else {
       this.log('bgi', `setrgbpalette() colornum [${colornum}] out of range!`);

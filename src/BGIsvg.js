@@ -452,33 +452,6 @@ class BGIsvg extends BGI {
     }
   }
 
-  // Grab and return a byte array of image data, then embeds it in SVG.
-  // returns this image object:
-  // { x:int, y:int, width:int, height:int, data:Uint8ClampedArray, id:string }
-  //
-  getimage (left, top, right, bottom) {
-    const image = super.getimage(left, top, right, bottom);
-
-    if (this.svgShowIcons && this.svgGetImage && this.svgView && this.svgActive && image && image.data) {
-      // preparing an 'image' SVG node
-      const id = this.svgPrefix + '-img' + this.svgImgCount;
-      image.id = id;
-
-      // embed image as a data URL
-      const url = this.imageToDataURL(image);
-
-      // append SVG node
-      if (url) {
-        const defs = this.svgNode('defs', {});
-        const imageTag = this.svgNode('image', { id:id, href:url, width:image.width, height:image.height });
-        defs.appendChild(imageTag);
-        this.svgView.appendChild(defs);
-        this.svgImgCount++;
-      }
-    }
-    return image;
-  }
-
   // Draws text using current info.cp position, info.text.charsize and info.text.direction.
   // Only outputs SVG text for default 8x8 font (0). Other fonts are drawn using lines.
   outtext (text) {
@@ -520,19 +493,18 @@ class BGIsvg extends BGI {
   // Draws a bitmap image in SVG if svgShowIcons is set true.
   // image is an object:
   // { x:int, y:int, width:int, height:int, data:Uint8ClampedArray, url:string }
-  // TODO: wmode = write mode { 0=COPY_PUT, 1=XOR_PUT, 2=OR_PUT, 3=AND_PUT, 4=NOT_PUT }
+  // wmode = write mode { 0=COPY_PUT, 1=XOR_PUT, 2=OR_PUT, 3=AND_PUT, 4=NOT_PUT }
+  //   write modes for XOR_PUT, OR_PUT, AND_PUT will not output correct pixels,
+  //   but simulates most masking effects pretty well.
+  //   COPY_PUT and NOT_PUT do output correct pixels.
   //
   putimage (left, top, image, wmode, defaults = {}) {
-    const ret = super.putimage(left, top, image, wmode);
+    const ret = super.putimage(left, top, image, wmode, defaults);
     const {
       info = this.info,
     } = defaults;
 
-    if (ret && this.svgView && this.svgActive && image.id && this.svgShowIcons) {
-
-      if (wmode > 0) {
-        this.log('svg', `RIP_PUT_IMAGE mode ${wmode} not supported`); // DEBUG
-      }
+    if (this.svgView && this.svgActive && this.svgShowIcons && ret && image && image.data) {
 
       // offset by viewport
       if (info && info.vp) {
@@ -540,40 +512,75 @@ class BGIsvg extends BGI {
         top += info.vp.top;
       }
 
-      // use image defined by readimagefile()
-      let href = '#' + image.id;
-      let useTag = this.svgNode('use', { href:href, x:left, y:top });
-      this.svgView.appendChild(useTag);
-    }
-    return ret;
-  }
+      // determine image id for given wmode
+      let imageId;
+      if (wmode === BGI.AND_PUT) {
+        imageId = image.id_and;
+      }
+      else if (wmode === BGI.NOT_PUT) {
+        imageId = image.id_not;
+      }
+      else {
+        imageId = image.id;
+      }
 
-  // Fetch an ICN file from cache or online.
-  // filename: name without path.
-  // returns an image or empty object.
-  // { width:int, height:int, data:Uint8ClampedArray, url:string, id:string }
-  //
-  async readimagefile (filename) {
-    const image = await super.readimagefile(filename);
+      // create an 'image' SVG node
+      if (!imageId) {
 
-    if (this.svgShowIcons && this.svgView && this.svgActive && image && image.data && image.url) {
-      // preparing an 'image' SVG node
-      const id = this.svgPrefix + '-img' + this.svgImgCount;
-      image.id = id;
+        // modify palette depending on write mode and store id
+        imageId = this.svgPrefix + '-img' + this.svgImgCount;
+        let tpalette = structuredClone(this.palette);
+        if (wmode === BGI.AND_PUT) {
+          // convert highest pixel (15 or 255) to transparent for AND_PUT mode
+          this.setrgbpalette(this.colorMask, 0, 0, 0, 0, { pal:tpalette });
+          image.id_and = imageId;
+        }
+        else if (wmode === BGI.NOT_PUT) {
+          // invert every color in the palette
+          tpalette = this.invertedPalette(tpalette);
+          image.id_not = imageId;
+        }
+        else {
+          // convert pixel 0 to transparent for COPY_PUT, XOR_PUT, OR_PUT modes
+          this.setrgbpalette(0, 0, 0, 0, 0, { pal:tpalette });
+          image.id = imageId;
+        }
 
-      // either embed image as a data URL, or use a relative URL to .png version in the same path.
-      const url = (this.svgEmbedIcons) ? this.imageToDataURL(image) : image.url.replace('.ICN', '.png');
+        let url;
+        if (this.svgEmbedIcons) {
+          // embed image as a data URL
+          url = this.imageToDataURL(image, { pal:tpalette });
+        }
+        else if (image.url) {
+          // use a relative URL to .png version in the same path
+          url = image.url.replace('.ICN', '.png');
+        }
 
-      // append SVG node
-      if (url) {
-        const defs = this.svgNode('defs', {});
-        const imageTag = this.svgNode('image', { id:id, href:url, width:image.width, height:image.height });
-        defs.appendChild(imageTag);
-        this.svgView.appendChild(defs);
-        this.svgImgCount++;
+        // append SVG node
+        if (url) {
+          let defs = this.svgNode('defs', {});
+          let imageTag = this.svgNode('image', { id:imageId, href:url, width:image.width, height:image.height });
+          defs.appendChild(imageTag);
+          this.svgView.appendChild(defs);
+          this.svgImgCount++;
+        }
+      }
+
+      // use the image
+      if (imageId) {
+        if (wmode === BGI.COPY_PUT) {
+          // since primary png sets every 0 pixel transparent, draw a bg filled box first
+          let fill = this.pal2hex(0);
+          this.svgView.appendChild( this.svgNode('rect', {
+            x:(left+0.5), y:(top+0.5), width:(image.width-1), height:(image.height-1), fill:fill
+          }));
+        }
+        let href = '#' + imageId;
+        let useTag = this.svgNode('use', { href:href, x:left, y:top });
+        this.svgView.appendChild(useTag);
       }
     }
-    return image;
+    return ret;
   }
 
   // draws in current line style, thickness, and drawing color
