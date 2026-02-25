@@ -155,12 +155,13 @@
   }
 
   /* debug log colors */
-  .rip-log-trm { color: #888; }
-  .rip-log-fnt { color: #b8f; }
-  .rip-log-rip { color: #88f; }
-  .rip-log-bgi { color: #8ff; }
-  .rip-log-svg { color: #8f8; }
-  .rip-log-err { color: #f88; }
+  .rip-log-trm { color: #888; } /* gray */
+  .rip-log-fnt { color: #b8f; } /* magenta */
+  .rip-log-rip { color: #88f; } /* blue */
+  .rip-log-ans { color: #ff8; } /* yellow */
+  .rip-log-bgi { color: #8ff; } /* cyan */
+  .rip-log-svg { color: #8f8; } /* green */
+  .rip-log-err { color: #f88; } /* red */
   /* rip command colors */
   .cmd-ok  { color: #88f; }
   .cmd-not { color: #f88; }
@@ -275,6 +276,22 @@
     <option value="rips/set2/OA-LITE2">OA-LITE2.RIP</option>
     <option value="rips/set2/PX-INF">PX-INF.RIP</option>
     <option value="rips/set2/WC-PF">WC-PF.RIP</option>
+    <option value="rips/set3/CHAPLIN">CHAPLIN.RIP</option>
+    <option value="rips/set3/MAINMENU">MAINMENU.RIP</option>
+    <option value="rips/set3/AN-ACID1">AN-ACID1.RIP</option>
+  </select>
+
+  <select id="rip-speed" onchange="selectSpeed()">
+    <option value="0" selected>Full Speed</option>
+    <option value="256000">256 kbps</option>
+    <option value="128000">128 kbps</option>
+    <option value="56000">56 kbps</option>
+    <option value="33600">33.6 kbps</option>
+    <option value="28800">28.8 kbps</option>
+    <option value="14400">14.4 kbps</option>
+    <option value="9600">9,600 bps</option>
+    <option value="4800">4,800 bps</option>
+    <option value="2400">2,400 bps</option>
   </select>
 
   <!-- <button onclick="ripterm.clear();">Clear</button> -->
@@ -416,7 +433,7 @@
     counterId: 'rip-counter',
     coordsId: 'rip-coords',
     timeInterval: 0,
-    refreshInterval: 20,
+    refreshInterval: 50,  // was 20
     fontsPath: 'fonts',
     iconsPath: 'icons',
     logQuiet: true
@@ -433,7 +450,7 @@
       ripterm.clearFile();
       ripterm.clearScreenshot();
       ripterm.clearDiff();
-      ripterm.setupStream(file.name, file.stream());
+      ripterm.openFile(file);
     }
   }
 
@@ -457,8 +474,7 @@
     if (url !== '') {
       const urlRIP = url + '.RIP';
       ripterm.readScreenshot(url + '.png');
-      let icons = ripterm.readFile(urlRIP); // v3
-      //ripterm.setupStream(urlRIP, fetch(urlRIP).then(r => r.body)); // v4
+      ripterm.openURL(urlRIP);
     }
   }
 
