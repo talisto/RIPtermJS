@@ -142,7 +142,6 @@ class RIPterm {
       Object.entries(opts).forEach( ([k, v]) => { this.opts[k] = v } );
 
       // init other vars
-      this.ripData = [];    // v3 file pre-loaded
       this.ripFile;         // v4 File type
       this.ripURL;          // v4 string
       this.ripStream;       // v4 stream (throttled)
@@ -222,7 +221,6 @@ class RIPterm {
         this.initCommands();
 
         // must do once
-        this.animate = this.animate.bind(this);
         this.handleMouseEvents = this.handleMouseEvents.bind(this);
         this.setupCmdHover();
         this.setupCoordsMouseEvents();
@@ -283,17 +281,6 @@ class RIPterm {
       await this.reloadStream();
       await this.playStream();
     }
-    else if (this.ctx && this.ripData && (this.ripData.length > 0)) {
-      // v3 (no longer used) TO REMOVE
-      this.isRunning = true;
-      if (this.cmdi >= this.ripData.length) { this.cmdi = 0; }
-      // timers
-      if (this.cmdTimer) { window.clearTimeout(this.cmdTimer); this.cmdTimer = null; }
-      if (this.refTimer) { window.clearTimeout(this.refTimer); this.refTimer = null; }
-      this.cmdTimer = window.setTimeout(async () => { await this.drawNext() }, this.opts.timeInterval);
-      //this.animationId = requestAnimationFrame(this.animate);
-      this.refTimer = window.setTimeout(() => { this.refreshCanvas() }, this.opts.refreshInterval);
-    }
     else {
       this.log('trm', 'Must set "canvasId" and load a RIP first.');
     }
@@ -309,15 +296,6 @@ class RIPterm {
     }
     if (this.cmdTimer) { window.clearTimeout(this.cmdTimer); this.cmdTimer = null; }
     if (this.refTimer) { window.clearTimeout(this.refTimer); this.refTimer = null; }
-    //if (this.animationId) { cancelAnimationFrame(this.animationId); }
-    /* TO REMOVE
-    // unlock prior stream
-    if (this.ripStream && this.ripStream.locked && this.ripReader) {
-      this.ripReader.releaseLock();
-      this.ripReader = null;
-    }
-    // */
-    //await this.setupStream(); // resets file reader
     this.refreshCanvas();
     if (this.commandsDiv) { this.commandsDiv.innerHTML = this.outCommands; }
   }
@@ -330,7 +308,6 @@ class RIPterm {
     this.clearDiff();
     this.refreshCanvas();
     this.cmdi = 0;
-    //if (this.counterDiv) { this.counterDiv.innerHTML = `${this.cmdi} / ${this.ripData.length}`; }
     if (this.counterDiv) { this.counterDiv.innerHTML = ''; }
     this.outCommands = '';
     if (this.commandsDiv) { this.commandsDiv.innerHTML = ''; }
@@ -377,49 +354,10 @@ class RIPterm {
     }
   }
 
-  // NOT USED
-  // Called from requestAnimationFrame() ~60 times a second?
-  // this is currently slower than using setTimeout()
-  //
-  async animate (timestamp) {
-    await this.drawNext();
-  }
-
 
   ////////////////////////////////////////////////////////////////////////////////
-  // copied from ripterm.js v2
-
-  // OLD v2-3: using pre-loaded ripData[]
-  // TO REMOVE
-  async drawNext () {
-    if (!this.isRunning) { return }
-    if (this.ripData && (this.cmdi < this.ripData.length)) {
-      let d = this.ripData[this.cmdi];
-      // console.log(d); // DEBUG
-      this.runRIPcmd(d[0], d[1]);
-      /* TO REMOVE
-      if ( this.cmd[d[0]] ) {
-        const o = this.cmd[d[0]](d[1]);
-        if (o && o.run) { await o.run({}); }
-        //this.log('rip', `!|${d[0]}${d[1]} ${JSON.stringify(o)}`); // DEBUG
-      }
-      if (this.opts.pauseOn.includes(d[0])) {
-        if (!this.opts.floodFill && (d[0] == 'F')) { }
-        else { await this.stop(); }
-      }
-      // */
-      this.cmdi++;
-      this.cmdTimer = window.setTimeout(async () => { await this.drawNext() }, this.opts.timeInterval);
-      //this.animationId = requestAnimationFrame(this.animate);
-      //this.timer = window.setTimeout(async () => { await this.drawNext() }, this.opts.timeInterval);
-    }
-    else {
-      await this.stop();
-    }
-  }
 
   refreshCanvas () {
-    //if (this.counterDiv) { this.counterDiv.innerHTML = `${this.cmdi} / ${this.ripData.length}`; }
     if (this.counterDiv) { this.counterDiv.innerHTML = this.cmdi.toLocaleString(); }
     this.bgi.refresh();
     if (this.diffActive) { this.refreshDiff(); }
@@ -453,64 +391,9 @@ class RIPterm {
     return outHtml;
   }
 
-  // OLD v2-3: stores ripData[] from pre-loaded file
-  // returns an array of icon filenames used in RIP file, else empty array.
-  // TO REMOVE
-  readFile (url) {
-    this.log('trm', 'readFile(): ' + url);
-
-    let iconNames = [];
-    this.cmdi = 0;
-    let req = new XMLHttpRequest();
-    if (req != null) {
-
-      req.open("GET", url, false);
-      req.overrideMimeType('text/plain; charset=x-user-defined');  // allows ASCII control chars in input
-      req.send(null);
-      if (req.status != 200) { this.log('trm', 'Error downloading: ' + url); return; }
-      let text = req.responseText;
-
-      // output to commandsDiv
-      let outText = '';
-      let c = 1;
-      this.ripData = [];
-
-      // process one line at a time
-      // FIXME: missing \r at end of lines, and need to remove all \n
-      let lines = text.split("\n");
-      for (let i=0; i < lines.length; i++) {
-        let aLine = lines[i];
-        while (aLine.match( /(.*)\\$/m )) {  // works? (NO) FIXME: include spaces?
-          aLine = RegExp.$1 + lines[i+1];  // works?
-          i++;
-        }
-        if (aLine.charAt(0) == '!') {
-          const cmds = aLine.substr(2).split('|');
-          for (let j=0; j < cmds.length; j++) {
-            const d = this.parseRIPcmd(cmds[j]);
-
-            // add extracted icon filenames to list
-            iconNames.push(...this.parseIconNames(d[0], d[1]));
-
-            outText += this.outputCmdsHtml(c, d[0], d[1]);
-            this.ripData.push(d);  // store command + args in array
-            c++;
-          }
-        } // else skip line
-      }
-      if (this.commandsDiv) { this.commandsDiv.innerHTML = outText; }
-    }
-
-    // console.log(this.ripData); // DEBUG
-    // this.log('trm', `icons: ${iconNames}`); // DEBUG
-
-    return iconNames;
-  }
-
   clearFile () {
     this.cmdi = 0;
     this.outCommands = '';
-    this.ripData = [];
     this.refreshCanvas();
     if (this.counterDiv) { this.counterDiv.innerHTML = ''; }
     if (this.commandsDiv) { this.commandsDiv.innerHTML = ''; }
@@ -936,247 +819,6 @@ class RIPterm {
       }
     }
     await this.stop();
-  }
-
-  // currently reads the entire stream until it's finished.
-  // TO REMOVE
-  async readStream (reader = this.ripReader) {
-
-    this.log('trm', `readStream()`); // DEBUG
-
-    if (!reader) { return }
-    let outText = "", c=1;
-    let inRipMode = false;
-    // a TypedArray doesn't have same methods as Array()
-    //let buffer = new Uint8Array();
-    let buffer = [];
-    let nextbuffer = [];
-    //let textBuffer = '';
-    let idx, inst, temp, text;
-    let exitLoop = false;
-    let exitCounter = 100;
-
-    while (exitCounter > 0) {
-
-      // BUG on following:
-      // Unhandled Promise Rejection: TypeError: read() called on a reader owned by no readable stream
-      // (likely happens if 'Play' button pressed in rapid succession?)
-
-      // example from AI
-      //const reader = stream.getReader({ mode: "byob" });
-      //const buffer = new Uint8Array(64 * 1024); // 64 KB
-      //const { value, done } = await reader.read(buffer);
-
-      const { value, done } = await reader.read();
-      if (done) {
-        this.log('trm', 'Stream complete');
-        break;
-      }
-
-      this.log('trm', `read ${value.length}`); // DEBUG
-      //this.log('trm', `read ${value.length} bytes: ${value}`); // DEBUG
-      // now says "read 6 bytes" when set to 1,200 bps (correct)
-
-      // value is a TypeArray of bytes (Uint8Array)
-      // outputting 'value' will print byte values separated by commas
-
-      //text = new TextDecoder("utf-8").decode(value);
-
-      const valArray = Array.from(value);
-      buffer.push(...valArray);
-      //textBuffer += text;
-      //buffer = Array.from(textBuffer);
-
-      exitLoop = false;
-      do {
-        exitCounter -= 1;
-
-        if (buffer[0] === 10) {
-          // remove LF(10) from start of buffer, usually comes after a CR(13).
-          // handles case where last read only read upto CR, but didn't include LF.
-          buffer.shift();
-          if (buffer.length === 0) { exitLoop = true; break; }
-        }
-
-        if (buffer[0] === 33) {
-          // '!' starts RIP mode
-          inRipMode = true;
-          buffer.shift();
-          if (buffer.length === 0) { exitLoop = true; break; }
-        }
-
-        if (inRipMode) {
-          if (buffer[0] === 124) {
-            // '|' starts RIP command
-            if (buffer.length === 0) { exitLoop = true; break; }
-            do {
-              // looping thru every '|' until we hit a newline or buffer runs out
-              //exitLoop = false;
-
-              // first check for newlines
-              // BUG: only accounts for 1 newline, need to handle multiple lines
-              idx = buffer.indexOf(13); // find CR
-              if (idx > 0) {
-                // found CR
-                if (buffer[idx - 1] === 92) {
-                  // backslash escapes CR
-                  temp = buffer.splice(0, idx - 2); // take bytes upto backslash
-                  // next byte should be LF (if not at end of buffer)
-                  if (buffer.length > 0) {
-                    if (buffer[0] === 10) { buffer.shift(); } // remove LF
-                  }
-                  // merge temp + buffer removes the (\+CR+LF)
-                  buffer.unshift(temp);
-                }
-                else {
-                  // end of line without backslash
-                  // TODO: REDO
-                  temp = buffer.splice(0, idx - 1); // grab all before CR
-
-                  // I think I need to rethink all of this, maybe create a
-                  // state machine, read 1 byte at a time (push to another array)
-                  // check for | and \ and CR/LF.
-
-                  /*
-                  buffer.shift(); // remove first '|'
-                  temp = buffer.splice(0, idx - 1); // remove idx items
-                  inst = new TextDecoder("utf-8").decode(new Uint8Array(temp));
-                  buffer.shift(); // remove CR
-                  await this.runRIPinst(inst);
-                  inRipMode = false;
-                  // */
-                }
-              }
-              else {
-                // no CR, so we'll need more bytes
-                exitLoop = true;
-              }
-
-              // BUG: this searches for '|' past the newlines
-              idx = buffer.indexOf(124, 1); // find next '|'
-              if (idx > 0) {
-                if (buffer[idx - 1] === 92) {
-                  // TODO: backslash escapes '|'
-                }
-                buffer.shift(); // remove first '|'
-                temp = buffer.splice(0, idx - 1); // remove idx items
-                inst = new TextDecoder("utf-8").decode(new Uint8Array(temp));
-                buffer.shift(); // remove second '|'
-                await this.runRIPinst(inst);
-              }
-              else {
-                // no more '|' so check for newline
-                // there's still a '|' in pos 0
-
-              }
-            } while (!exitLoop && (buffer.length > 0));
-          }
-          else {
-            // we're in RIP mode, but not starting with '|'
-            // so invalid RIP, switch to ANSI mode
-            inRipMode = false;
-          }
-        }
-        else {
-          // in ANSI mode, send and clear the buffer up to the next newline.
-          // not checking for '\' before CR in ANSI mode.
-          idx = buffer.indexOf(13); // scan for first CR (newline)
-          if (idx >= 0) {
-            // found CR
-            temp = buffer.splice(0, idx); // remove idx items including CR
-            if ((buffer.length > 0) && (buffer[0] === 10)) {
-              temp.push(buffer.shift()); // remove LF and append to temp
-            }
-            // not exiting loop yet to check if next line starts in RIP mode
-          }
-          else {
-            // no newline, send all bytes to text window
-            temp = buffer.splice(0, buffer.length); // clears buffer
-            exitLoop = true;
-          }
-          await this.printANSI(new Uint8Array(temp));
-        }
-
-      } while (!exitLoop && (exitCounter > 0));
-
-      // DEBUG
-      //const text = String.fromCharCode(...value); // ASCII only (can crash with large array)
-      //const text = new TextDecoder("utf-8").decode(value); // may not want for high-bit chars
-      //this.inText += text;
-      //outText += text;
-
-      //this.log('trm', value); // DEBUG
-
-    /*
-      // DEBUG
-      if (this.commandsDiv) {
-        //this.commandsDiv.append(value + '<br>'); // doesn't output html
-        this.commandsDiv.innerHTML = outText;
-      }
-    // */
-
-      // right now, outText is one large string, including newlines CR LF (13,10)
-      // 33=!, 124=|, 42=*, 92=\
-      // 10=LF, 13=CR, 27=ESC
-
-      // TODO: REDO the following code
-      // *** NEED TO FIX THE FOLLOWING TO HANDLE small chunk sizes ***
-
-      // process one line at a time
-      // FIXME: missing \r at end of lines, and need to remove all \n
-
-      // this.runRIPinst(inst)
-  /*
-      let lines = text.split("\n");
-      for (let i=0; i < lines.length; i++) {
-        let aLine = lines[i];
-        while (aLine.match( /(.*)\\$/m )) {  // works? (NO) FIXME: include spaces?
-          aLine = RegExp.$1 + lines[i+1];  // works?
-          i++;
-        }
-        if (aLine.charAt(0) == '!') {
-          const cmds = aLine.substr(2).split('|');
-          for (let j=0; j < cmds.length; j++) {
-            const d = this.parseRIPcmd(cmds[j]);
-            outText += this.outputCmdsHtml(c, d[0], d[1]);
-            //this.ripData.push(d);  // store command + args in array
-            c++;
-
-            // run command
-            if ( this.cmd[d[0]] ) {
-              const o = this.cmd[d[0]](d[1]);
-              if (o && o.run) { await o.run({}); }
-            }
-            this.cmdi++;
-          }
-        } // else skip line
-      }
-  // */
-
-      // uncomment once we have count, cmd0, args
-      //if (this.commandsDiv) {
-      //  this.commandsDiv.append(this.outputCmdsHtml(count, cmd0, args)); // ??
-      //}
-
-    }
-    // done here
-    await this.stop();
-    //if (this.commandsDiv) { this.commandsDiv.innerHTML = outText; }
-
-  }
-
-  // run RIP instruction using combined string (command code + args)
-  // TO REMOVE - No Longer Used
-  async runRIPinst (inst) {
-    const [cmd0, args] = this.parseRIPcmd(inst);
-
-    // output to commands window (TEST)
-    if (this.commandsDiv) {
-      const outText = this.commandsDiv.innerHTML + this.outputCmdsHtml(0, cmd0, args);
-      this.commandsDiv.innerHTML = outText;
-    }
-
-    await this.runRIPcmd(cmd0, args);
   }
 
   // run RIP instruction given command code and args
