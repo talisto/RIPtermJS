@@ -724,7 +724,7 @@ class RIPterm {
       case ST_START:
         ansiBuf.push(byte);
         if (byte === 33) { state = ST_BANG; } // '!'
-        else if (byte === 10) { } // LF
+        else if ((byte === 13) || (byte === 10)) { } // CR or LF
         else { state = ST_ANSI; }
         break;
 
@@ -754,7 +754,7 @@ class RIPterm {
 
       case ST_ANSI:
         ansiBuf.push(byte);
-        if (byte === 13) { state = ST_START; } // CR
+        if ((byte === 13) || (byte === 10)) { state = ST_START; } // CR or LF
         else if ((byte === 1) || (byte === 2)) { state = ST_BANG; } // ^A or ^B
         else { }
         break;
