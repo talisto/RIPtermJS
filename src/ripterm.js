@@ -1272,6 +1272,10 @@ class RIPterm {
     // TODO: $ variables & host command templates
 
     this.log('trm', 'send to host: ' + text);
+    // Emit event for external listeners (e.g. BBS game clients)
+    if (this.onHostCommand) {
+      this.onHostCommand(text);
+    }
   }
 
 
