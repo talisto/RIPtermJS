@@ -716,7 +716,7 @@ class RIPterm {
         // https://developer.mozilla.org/en-US/docs/Web/API/Encoding_API/Encodings
 
         const decoder = new TextDecoder("x-user-defined");
-        const cmd0 = decoder.decode(new Uint8Array(cmdBuf)) || '';
+        const cmd0 = outerThis.replaceControlChars(decoder.decode(new Uint8Array(cmdBuf))) || '';
         const args = decoder.decode(new Uint8Array(argsBuf)) || '';
         cmdBuf.length = 0;
         argsBuf.length = 0;
@@ -853,14 +853,32 @@ class RIPterm {
     }
   }
 
+  // Replace control chars in text with Unicode symbols.
+  // returns modified text for display.
+  //
+  replaceControlChars (text) {
+
+    // create a table of Unicode control char symbols for 0x00(NUL) to 0x1F(US)
+    let controlChars = Object.fromEntries(
+      Array.from({ length: 0x20 }, (_, i) => [
+        String.fromCharCode(i), String.fromCodePoint(0x2400 + i)
+      ])
+    );
+    controlChars['\x7F'] = '\u2421'; // DEL
+
+    // replace all control chars with symbols
+    return text.split('').map(c => controlChars[c] ?? c).join('');
+  }
+
   // Text to output to the Text Window.
   // bytes is an Uint8Array
   async printANSI (bytes) {
     // TODO: this is a stub for now
+    //this.log('ans', `ANSI: ${bytes}`); // DEBUG
 
-    // TEST: decoding to utf-8 will likely cause issues with high-bit ASCII values.
-    //const text = new TextDecoder("utf-8").decode(bytes);
-    this.log('ans', `ANSI: ${bytes}`); // DEBUG
+    const text = new TextDecoder("x-user-defined").decode(bytes);
+    const otext = this.replaceControlChars(text);
+    this.log('ans', `${otext}`); // DEBUG
   }
 
 
@@ -2290,12 +2308,12 @@ class RIPterm {
       },
 
       // RIP_DEFINE (1D)
-      // RIP_QUERY (1<esc>)
+      // RIP_QUERY (1␛)(1<ESC>)
       // RIP_COPY_REGION (1G)
       // RIP_READ_SCENE (1R)
       // RIP_FILE_QUERY (1F)
 
-      // RIP_ENTER_BLOCK_MODE (9<esc>)
+      // RIP_ENTER_BLOCK_MODE (9␛)(9<ESC>)
 
       // RIP_HEADER (h) - RIPscrip v2.0
       'h': (args) => {
