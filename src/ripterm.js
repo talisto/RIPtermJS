@@ -156,6 +156,7 @@ class RIPterm {
       this.buttons = [];  // array of active button objects
       this.buttonClicked = null; // last clicked button object
       this.withinButton = false;
+      this.controlChars = this.initControlChars();
 
       // debug options
       this.commandsDiv = ('commandsId' in opts) ? document.getElementById(opts.commandsId) : null;
@@ -235,6 +236,18 @@ class RIPterm {
   // call this after new RIPterm() to load all the fonts.
   async initFonts () {
     await this.bgi.initFonts();
+  }
+
+  // create a table of Unicode control char symbols.
+  initControlChars () {
+    // for 0x00(NUL) thru 0x1F
+    let cchars = Object.fromEntries(
+      Array.from({ length: 0x20 }, (_, i) => [
+        String.fromCharCode(i), String.fromCodePoint(0x2400 + i)
+      ])
+    );
+    cchars['\x7F'] = '\u2421'; // DEL
+    return cchars;
   }
 
   initFullScreen (canvas) {
@@ -854,20 +867,11 @@ class RIPterm {
   }
 
   // Replace control chars in text with Unicode symbols.
+  // must set this.controlChars = this.initControlChars() first.
   // returns modified text for display.
   //
   replaceControlChars (text) {
-
-    // create a table of Unicode control char symbols for 0x00(NUL) to 0x1F(US)
-    let controlChars = Object.fromEntries(
-      Array.from({ length: 0x20 }, (_, i) => [
-        String.fromCharCode(i), String.fromCodePoint(0x2400 + i)
-      ])
-    );
-    controlChars['\x7F'] = '\u2421'; // DEL
-
-    // replace all control chars with symbols
-    return text.split('').map(c => controlChars[c] ?? c).join('');
+    return (this.controlChars) ? text.split('').map(c => this.controlChars[c] ?? c).join('') : text;
   }
 
   // Text to output to the Text Window.
