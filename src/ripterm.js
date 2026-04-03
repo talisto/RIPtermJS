@@ -18,7 +18,7 @@
  *
  **/
 
-// import BGI from './BGI.js'; // uncomment to use modules
+import BGI from './BGI.js';
 
 ////////////////////////////////////////////////////////////////////////////////
 // TEST function
@@ -1444,32 +1444,32 @@ class RIPterm {
   }
 
   // Parse the inner contents of a ((...)) Pop-Up Pick List.
-  // Returns { question, required, entries } where entries is an array of
+  // Returns { prompt, required, entries } where entries is an array of
   // { value, display, hotkey } objects.
   //
-  // Spec format: [*]question?::entry1[@desc1],entry2[@desc2],...
-  //   - Leading * on question means selection is required (ESC disabled)
+  // Spec format: [*]prompt?::entry1[@desc1],entry2[@desc2],...
+  //   - Leading * on prompt means selection is required (ESC disabled)
   //   - @desc overrides the display text for that entry
   //   - _x_ or ~x~ in descriptions highlight a hotkey character
   //
   _parsePickList (inner) {
     const sepIdx = inner.indexOf('::');
-    let question, required = false, entriesStr;
+    let prompt, required = false, entriesStr;
 
     if (sepIdx >= 0) {
-      question = inner.substring(0, sepIdx).trim();
+      prompt = inner.substring(0, sepIdx).trim();
       entriesStr = inner.substring(sepIdx + 2);
     } else {
-      question = '';
+      prompt = '';
       entriesStr = inner;
     }
 
-    if (question.startsWith('*')) {
+    if (prompt.startsWith('*')) {
       required = true;
-      question = question.substring(1).trim();
+      prompt = prompt.substring(1).trim();
     }
-    if (!question) {
-      question = 'Choose one of the following:';
+    if (!prompt) {
+      prompt = 'Choose one of the following:';
     }
 
     const entries = entriesStr.split(',').map(raw => {
@@ -1492,7 +1492,7 @@ class RIPterm {
       return { value: value.trim(), display: display.trim(), hotkey };
     }).filter(e => e.display);
 
-    return { question, required, entries };
+    return { prompt, required, entries };
   }
 
 
@@ -2641,4 +2641,7 @@ class RIPterm {
   }
 
 } // end class RIPterm
+
+export default RIPterm;
+
 ////////////////////////////////////////////////////////////////////////////////

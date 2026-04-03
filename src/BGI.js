@@ -6,7 +6,7 @@
  *
  * Borland Graphics Interface (BGI) for JavaScript
  * https://en.wikipedia.org/wiki/Borland_Graphics_Interface
- * 
+ *
  * This is a subset of the library which emulates only some BGI functions.
  *
  * Used source code from:
@@ -25,10 +25,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  **/
 
-// not using as a module for now, but
-// uncomment this line if you do want to use as a module:
-//export default 
-class BGI {
+export default class BGI {
 
   // class static constants moved to end of file.
 
@@ -2583,9 +2580,9 @@ class BGI {
   settextjustify (horiz, vert) {
     // SEE text_just enums
     // SEE https://www.cs.colorado.edu/~main/bgi/doc/settextjustify.html
-    // Text output after a call to settextjustify is justified around the current position (CP) horizontally 
-    // and vertically, as specified. The default justification settings are LEFT_TEXT (for horizontal) and 
-    // TOP_TEXT (for vertical). If horiz is equal to LEFT_TEXT and direction equals HORIZ_DIR, the CP's 
+    // Text output after a call to settextjustify is justified around the current position (CP) horizontally
+    // and vertically, as specified. The default justification settings are LEFT_TEXT (for horizontal) and
+    // TOP_TEXT (for vertical). If horiz is equal to LEFT_TEXT and direction equals HORIZ_DIR, the CP's
     // x component is advanced after a call to outtext(string) by textwidth(string).
   }
 
@@ -2713,7 +2710,7 @@ class BGI {
     }
     return th;
   }
-  
+
   // takes the string length, current font size, and multiplication factor, and determines the width of text in pixels.
   textwidth (text) {
 
@@ -2864,7 +2861,7 @@ class BGI {
   }
 
   // NOT IN BGI nor WIN EXTRA, but from WinGraph (not official)
-  // floodmode = 
+  // floodmode =
   //   BORDER_FLOOD: fill area is bounded by color
   //   SURFACE_FLOOD: fill regions containing color
   setfloodmode (floodmode) {
@@ -2960,6 +2957,7 @@ class BGI {
   BGI.WM_RBUTTONDBLCLK = { type:'dblclick',  button:2 }; // right mouse button is double clicked
   BGI.WM_RBUTTONDOWN   = { type:'mousedown', button:2 }; // right mouse button is clicked down
   BGI.WM_RBUTTONUP     = { type:'mouseup',   button:2 }; // right mouse button is released up
+
 
 
 ////////////////////////////////////////////////////////////////////////////////
