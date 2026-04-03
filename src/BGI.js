@@ -25,10 +25,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  **/
 
-// not using as a module for now, but
-// uncomment this line if you do want to use as a module:
-//export default 
-class BGI {
+export default class BGI {
 
   // class static constants moved to end of file.
 
@@ -2960,6 +2957,7 @@ class BGI {
   BGI.WM_RBUTTONDBLCLK = { type:'dblclick',  button:2 }; // right mouse button is double clicked
   BGI.WM_RBUTTONDOWN   = { type:'mousedown', button:2 }; // right mouse button is clicked down
   BGI.WM_RBUTTONUP     = { type:'mouseup',   button:2 }; // right mouse button is released up
+
 
 
 ////////////////////////////////////////////////////////////////////////////////
